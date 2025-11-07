@@ -1,0 +1,31 @@
+[project]
+name = "rag-chatbot-fastapi-agno-nicegui"
+version = "0.1.0"
+description = "RAG Chatbot using FastAPI, Agno, and NiceGUI"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+	"fastapi>=0.100.0",
+	"uvicorn[standard]>=0.20.0",
+	"nicegui>=1.0.0",
+	"agno>=0.1.0",
+	"pydantic>=2.0",
+	"pdfplumber>=0.8.0",
+	"openai>=0.27.0",
+	"chromadb>=0.3.26",
+]
+
+[project.optional-dependencies]
+dev = [
+	"pytest>=7.0",
+	"pytest-check>=0.4",
+	"ruff>=0.18.0",
+	"black>=24.0",
+	"mypy>=1.0",
+	"pre-commit",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
