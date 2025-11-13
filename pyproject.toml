@@ -22,7 +22,7 @@ dev = [
 	"ruff>=0.14.4",
 	"black>=24.0",
 	"mypy>=1.0",
-	"pre_commit",
+	"pre-commit",
 ]
 
 [build-system]
