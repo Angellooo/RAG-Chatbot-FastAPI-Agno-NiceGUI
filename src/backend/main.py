@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import AsyncGenerator
-from asyncio import sleep
+import asyncio
+from src.agent.agent import create_agent
 
 
 """Backend streaming demo for the RAG Chatbot.
@@ -33,8 +34,8 @@ class ChatChunk(BaseModel):
     The schema is intentionally minimal: downstream consumers may
     expand it with metadata such as `is_final`, `speaker`, or `tokens`.
     """
-
     content: str
+    is_final: bool = False
 
 
 class ErrorResponse(BaseModel):
@@ -52,31 +53,41 @@ app = FastAPI(title="RAG Chatbot Backend")
 
 
 # --- Streaming Generator ---
-async def stream_response(prompt: str) -> AsyncGenerator[bytes, None]:
-    """Asynchronously yield bytes representing streamed output.
-
-    This helper simulates token-by-token (or word-by-word) streaming by
-    yielding small byte chunks with a short async sleep between them.
-
-    Parameters
-    ----------
-    prompt:
-        The input prompt to stream a response for. In the real system this
-        will be forwarded to an agent which returns a token stream.
-
-    Returns
-    -------
-    AsyncGenerator[bytes, None]
-        An async generator that yields byte payloads consumable by
-        `StreamingResponse`.
+async def stream_response(prompt: str, session_id: str | None):
     """
+        Async generator that streams chat response chunks as newline-delimited JSON.
 
-    words = prompt.split()
-    for word in words:
-        # yield a single word as bytes (space preserved)
-        yield f"{word} ".encode("utf-8")
-        # simulate async delay between chunks
-        await sleep(0.1)
+        This function wraps the agent's synchronous streaming output and yields each
+        chunk as a serialized ChatChunk JSON object. It is designed for use with FastAPI's
+        StreamingResponse to provide real-time, chunked output to the client.
+
+        Parameters
+        ----------
+        prompt : str
+            The user's prompt or question to send to the agent.
+        session_id : str | None
+            Optional session identifier to scope conversation history.
+
+        Yields
+        ------
+        bytes
+            Each yielded value is a newline-delimited JSON-encoded ChatChunk.
+    """
+    agent = create_agent(session_id)
+
+    def sync_gen():
+        for chunk in agent.run(prompt, stream=True):
+            # Defensive extraction: prefer .content, fallback to .text or str(chunk)
+            text = getattr(chunk, "content", None) or getattr(chunk, "text", None) or str(chunk)
+            if text:
+                # Wrap each chunk in ChatChunk and yield as JSON
+                chat_chunk = ChatChunk(content=text, is_final=False)
+                yield chat_chunk.json().encode("utf-8") + b"\n"
+        # After all chunks, send a final chunk
+        yield ChatChunk(content="", is_final=True).json().encode("utf-8") + b"\n"
+
+    for chunk in await asyncio.to_thread(lambda: list(sync_gen())):
+        yield chunk
 
 
 # --- Endpoint ---
@@ -102,8 +113,8 @@ async def chat_stream(request: ChatRequest):
     """
 
     try:
-        generator = stream_response(request.prompt)
-        return StreamingResponse(generator, media_type="text/plain")
+        generator = stream_response(request.prompt, request.session_id)
+        # Stream as NDJSON (newline-delimited JSON)
+        return StreamingResponse(generator, media_type="application/x-ndjson")
     except Exception as e:
-        # Return a JSON error model; FastAPI will serialize this
         return ErrorResponse(detail=str(e))
