@@ -14,6 +14,11 @@ def create_agent(session_id: str | None = None) -> Agent:
     model = OpenAIChat(
         id="gpt-4.1-nano",   # lightweight model for streaming
         api_key=settings.openai_api_key,
+        system_prompt=(
+            "You are a helpful RAG chatbot. "
+            "Always answer in GitHub-flavored Markdown, "
+            "cite sources clearly, and keep responses concise."
+        ), # Markdown ensures consistent formatting. NiceGUI can render Markdown directly
     )
 
     # Create agent with session_id (Agno manages memory internally)
